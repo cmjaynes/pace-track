@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings as SettingsIcon, Upload, Link2, Unlink, RefreshCw, Key, Check, AlertCircle } from 'lucide-react'
+import { Settings as SettingsIcon, Upload, Link2, Unlink, RefreshCw, Key, Check, AlertCircle, Heart } from 'lucide-react'
 import { Settings as SettingsDB, Run } from '../lib/db'
 import { parseHealthExport } from '../lib/csvImport'
 import { stravaAuthUrl, exchangeCode, syncStravaRuns, disconnectStrava } from '../lib/strava'
@@ -14,6 +14,14 @@ export default function Settings() {
   const [settings, setSettings] = useState(() => SettingsDB.get())
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('pt_anthropic_key') || '')
   const [apiKeySaved, setApiKeySaved] = useState(false)
+  const [maxHR, setMaxHR] = useState(() => localStorage.getItem('pt_max_hr') || '190')
+  const [maxHRSaved, setMaxHRSaved] = useState(false)
+
+  const saveMaxHR = () => {
+    localStorage.setItem('pt_max_hr', maxHR)
+    setMaxHRSaved(true)
+    setTimeout(() => setMaxHRSaved(false), 2000)
+  }
 
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -239,6 +247,44 @@ VITE_STRAVA_CLIENT_SECRET=your_client_secret`}
             </a>
           </div>
         )}
+      </Section>
+
+      {/* Max HR */}
+      <Section title="Heart Rate Zones" icon={Heart} iconColor="text-rose-400">
+        <p className="text-slate-400 text-sm mb-3">
+          Used to calculate HR zones (Z1–Z5) and training load. A common estimate is <strong className="text-slate-200">220 − your age</strong>.
+        </p>
+        <div className="flex gap-2 items-center">
+          <div className="relative w-32">
+            <input
+              type="number"
+              min="140" max="220"
+              value={maxHR}
+              onChange={e => setMaxHR(e.target.value)}
+              className="input w-full pr-12"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">bpm</span>
+          </div>
+          <button onClick={saveMaxHR}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              maxHRSaved ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+            }`}>
+            {maxHRSaved ? <><Check size={13} /> Saved</> : 'Save'}
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2 flex-wrap">
+          {[
+            { name: 'Z1 Recovery', color: 'bg-blue-500/20 text-blue-400', range: `< ${Math.round(parseInt(maxHR||190)*0.6)}` },
+            { name: 'Z2 Aerobic', color: 'bg-emerald-500/20 text-emerald-400', range: `${Math.round(parseInt(maxHR||190)*0.6)}–${Math.round(parseInt(maxHR||190)*0.7)}` },
+            { name: 'Z3 Tempo', color: 'bg-amber-500/20 text-amber-400', range: `${Math.round(parseInt(maxHR||190)*0.7)}–${Math.round(parseInt(maxHR||190)*0.8)}` },
+            { name: 'Z4 Threshold', color: 'bg-orange-500/20 text-orange-400', range: `${Math.round(parseInt(maxHR||190)*0.8)}–${Math.round(parseInt(maxHR||190)*0.9)}` },
+            { name: 'Z5 VO₂ Max', color: 'bg-rose-500/20 text-rose-400', range: `> ${Math.round(parseInt(maxHR||190)*0.9)}` },
+          ].map(z => (
+            <div key={z.name} className={`${z.color} rounded-lg px-2.5 py-1 text-xs`}>
+              {z.name} <span className="opacity-70">{z.range} bpm</span>
+            </div>
+          ))}
+        </div>
       </Section>
 
       {/* Danger zone */}

@@ -2,7 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Run } from '../lib/db'
 import { formatPace, formatDuration, formatDate, paceColor } from '../lib/utils'
-import { ArrowLeft, MapPin, Activity, Clock, Mountain, Heart, Thermometer, Timer } from 'lucide-react'
+import { ArrowLeft, MapPin, Activity, Mountain, Heart, Thermometer, Timer } from 'lucide-react'
+import { getHRZone, getMaxHR } from '../lib/utils'
 import { MapContainer, TileLayer, Polyline } from 'react-leaflet'
 import { BarChart, Bar, Cell, ReferenceLine, Tooltip, ResponsiveContainer } from 'recharts'
 
@@ -160,9 +161,23 @@ export default function RunDetail() {
         {run.elevation_gain != null && (
           <StatBox icon={Mountain} label="Elevation Gain" value={`${run.elevation_gain} ft`} color="text-teal-400" />
         )}
-        {run.avg_heart_rate_bpm && (
-          <StatBox icon={Heart} label="Avg Heart Rate" value={`${run.avg_heart_rate_bpm} bpm`} color="text-rose-400" />
-        )}
+        {run.avg_heart_rate_bpm && (() => {
+          const zone = getHRZone(run.avg_heart_rate_bpm, getMaxHR())
+          return (
+            <div className="bg-navy-900/60 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Heart size={11} className="text-slate-500" />
+                <p className="text-slate-500 text-xs">Avg Heart Rate</p>
+              </div>
+              <p className="font-semibold text-sm text-rose-400">{run.avg_heart_rate_bpm} bpm</p>
+              {zone && (
+                <span className={`mt-1 inline-block text-xs px-1.5 py-0.5 rounded-md font-medium ${zone.bgLight} ${zone.text}`}>
+                  Z{zone.zone} {zone.name}
+                </span>
+              )}
+            </div>
+          )
+        })()}
         {run.max_heart_rate_bpm && (
           <StatBox icon={Heart} label="Max Heart Rate" value={`${run.max_heart_rate_bpm} bpm`} color="text-rose-300" />
         )}

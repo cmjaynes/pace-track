@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { BarChart2, Wind, Mountain, Thermometer, Timer } from 'lucide-react'
+import { BarChart2, Wind, Mountain, Thermometer, Timer, Heart } from 'lucide-react'
 import { Run } from '../lib/db'
-import { formatPace, formatDate, paceColor } from '../lib/utils'
+import { formatPace, formatDate, paceColor, HR_ZONES, getHRZone, getMaxHR } from '../lib/utils'
+import { format, startOfWeek, addDays, parseISO, isSameWeek } from 'date-fns'
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, BarChart, Bar, Cell, ReferenceLine,
+  CartesianGrid, BarChart, Bar, Cell, ReferenceLine, Legend,
 } from 'recharts'
 
 function ImpactBadge({ label, value, impact }) {
@@ -222,6 +223,93 @@ export default function RunBreakdown() {
       {selected?.splits?.length > 0 && (
         <SplitsCard splits={selected.splits} avgPace={selected.pace} />
       )}
+
+      {/* HR Zone distribution */}
+      <HRZoneChart runs={runsWithData} />
+    </div>
+  )
+}
+
+function HRZoneChart({ runs }) {
+  const maxHR = getMaxHR()
+  const hrRuns = runs.filter(r => r.avg_heart_rate_bpm)
+  if (hrRuns.length < 2) return null
+
+  const now = new Date()
+
+  // Build 8-week stacked data
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const weekDate = addDays(startOfWeek(now), -7 * (7 - i))
+    const label = format(weekDate, 'M/d')
+    const weekRuns = hrRuns.filter(r => r.date && isSameWeek(parseISO(r.date), weekDate))
+    const entry = { week: label }
+    HR_ZONES.forEach(z => { entry[`z${z.zone}`] = 0 })
+    weekRuns.forEach(r => {
+      const zone = getHRZone(r.avg_heart_rate_bpm, maxHR)
+      if (zone) entry[`z${zone.zone}`] += Math.round((r.distance || 0) * 10) / 10
+    })
+    return entry
+  })
+
+  // Overall zone distribution across all HR runs
+  const zoneTotals = HR_ZONES.map(z => ({
+    ...z,
+    miles: hrRuns.reduce((s, r) => {
+      const rz = getHRZone(r.avg_heart_rate_bpm, maxHR)
+      return rz?.zone === z.zone ? s + (r.distance || 0) : s
+    }, 0)
+  }))
+  const totalMiles = zoneTotals.reduce((s, z) => s + z.miles, 0)
+
+  return (
+    <div className="bg-navy-800 border border-white/10 rounded-2xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Heart size={14} className="text-rose-400" />
+        <h3 className="text-white font-semibold text-sm">Heart Rate Zones</h3>
+        <span className="text-slate-500 text-xs ml-auto">based on max HR {maxHR} bpm</span>
+      </div>
+
+      {/* Overall zone breakdown bar */}
+      <div>
+        <p className="text-slate-500 text-xs mb-2">All-time zone distribution</p>
+        <div className="flex rounded-lg overflow-hidden h-5">
+          {zoneTotals.map(z => (
+            z.miles > 0 && (
+              <div
+                key={z.zone}
+                title={`Z${z.zone} ${z.name}: ${z.miles.toFixed(1)} mi`}
+                style={{ width: `${(z.miles / totalMiles) * 100}%`, background: z.color }}
+              />
+            )
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-3 mt-2">
+          {zoneTotals.filter(z => z.miles > 0).map(z => (
+            <div key={z.zone} className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: z.color }} />
+              <span className="text-slate-400 text-xs">Z{z.zone} {z.name}</span>
+              <span className="text-slate-500 text-xs">{((z.miles / totalMiles) * 100).toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Weekly stacked bar chart */}
+      <div>
+        <p className="text-slate-500 text-xs mb-2">Weekly miles by zone (last 8 weeks)</p>
+        <ResponsiveContainer width="100%" height={120}>
+          <BarChart data={weeks} margin={{ left: 0, right: 0, top: 2, bottom: 0 }}>
+            <XAxis dataKey="week" tick={{ fill: '#64748b', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <Tooltip
+              contentStyle={{ background: '#0D1B2A', border: '1px solid #2E3F55', borderRadius: 6, fontSize: 10 }}
+              formatter={(val, name) => [`${val} mi`, name.replace('z', 'Zone ')]}
+            />
+            {HR_ZONES.map(z => (
+              <Bar key={z.zone} dataKey={`z${z.zone}`} stackId="a" fill={z.color} radius={z.zone === 5 ? [3, 3, 0, 0] : [0, 0, 0, 0]} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
